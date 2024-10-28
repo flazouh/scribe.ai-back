@@ -1,5 +1,5 @@
-export interface AudioPayload {
-  audioData: Buffer;
+export interface TranscriptionPayload {
+  buffer: ArrayBuffer;
 }
 
 export interface ProcessStartedPayload {
@@ -10,6 +10,7 @@ export enum ChunkStatus {
   SPLITTING = 'splitting',
   TRANSCRIBING = 'transcribing',
   CORRECTING = 'correcting',
+  FINISHED = 'finished',
 }
 
 export interface ChunkProcessingData {
@@ -34,9 +35,9 @@ export interface ErrorPayload {
 
 
 export enum TranscriptionEvents {
-  PROCESS_STARTED = 'PROCESS_STARTED',
-  PROCESSING = 'PROCESSING',
-  PROCESS_FINISHED = 'PROCESS_FINISHED',
+  PROCESS_STARTED = 'transcription:process_started',
+  PROCESSING = 'transcription:processing',
+  PROCESS_FINISHED = 'transcription:process_finished',
 }
 
 export interface TranscripEventCallbacks {

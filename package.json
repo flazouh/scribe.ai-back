@@ -20,7 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "🌿 git.branch": "tsx git.branch.ts main",
     "💾 oco.commit": "git add . && oco --yes",
-    "🚀 stage-commit-pr-merge": "yarn run \"🌿 git.branch\" && yarn run \"💾 oco.commit\" && gh pr create --title \"$(git log -1 --pretty=%s)\" --body \"$(git log -1 --pretty=%b)\" --base staging --head $(git rev-parse --abbrev-ref HEAD) && gh pr merge $(git rev-parse --abbrev-ref HEAD) --squash --delete-branch",
+    "🚀 stage-commit-pr-merge": "yarn run \"🌿 git.branch\" && yarn run \"💾 oco.commit\" && gh pr create --title \"$(git log -1 --pretty=%s)\" --body \"$(git log -1 --pretty=%b)\" --base main --head $(git rev-parse --abbrev-ref HEAD) && gh pr merge $(git rev-parse --abbrev-ref HEAD) --squash --delete-branch",
     "🔄 name-convention": "tsx scripts/name-convention.enforcer.ts src/subscription"
   },
   "dependencies": {
@@ -39,6 +39,7 @@
     "uuid": "^11.0.1"
   },
   "devDependencies": {
+    "@types/fluent-ffmpeg": "^2.1.3",
     "@flydotio/dockerfile": "^0.5.9",
     "@nestjs/cli": "^10.0.0",
     "@nestjs/schematics": "^10.0.0",

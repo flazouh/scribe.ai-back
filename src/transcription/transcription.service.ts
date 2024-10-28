@@ -6,15 +6,15 @@ import * as path from 'path';
 import { Socket } from 'socket.io';
 import { tmpdir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
-import ffmpeg from 'fluent-ffmpeg';
-import { ChunkProcessingData, ChunkStatus, TranscriptionEvents } from './types/transcription.types';
+import * as ffmpeg from "fluent-ffmpeg";
+import { ChunkProcessingData, ChunkStatus, TranscripEventCallbacks, TranscriptionEvents } from './types/transcription.types';
 import { sendWSEvent } from './utils';
 
 @Injectable()
 export class TranscriptionService {
   private readonly logger = new Logger(TranscriptionService.name);
   private readonly openai: OpenAI;
-  private readonly CHUNK_DURATION = 30; // 30 seconds
+  private readonly CHUNK_DURATION = 60; // 60 seconds
 
   constructor(private configService: ConfigService) {
     this.openai = new OpenAI({
@@ -54,7 +54,7 @@ export class TranscriptionService {
         try {
           // Update chunk status to transcribing
           chunksState[index] = { id: index, status: ChunkStatus.TRANSCRIBING };
-          sendWSEvent<TranscriptionEvents, any>(client, TranscriptionEvents.PROCESSING, {
+          sendWSEvent<TranscriptionEvents, TranscripEventCallbacks>(client, TranscriptionEvents.PROCESSING, {
             chunks: [...chunksState]
           });
 
@@ -66,7 +66,7 @@ export class TranscriptionService {
             status: ChunkStatus.TRANSCRIBING, 
             transcription 
           };
-          sendWSEvent<TranscriptionEvents, any>(client, TranscriptionEvents.PROCESSING, {
+          sendWSEvent<TranscriptionEvents,TranscripEventCallbacks>(client, TranscriptionEvents.PROCESSING, {
             chunks: [...chunksState]
           });
 
@@ -86,11 +86,21 @@ export class TranscriptionService {
                 transcription,
                 correction: correctedText
               };
-              sendWSEvent<TranscriptionEvents, any>(client, TranscriptionEvents.PROCESSING, {
+              sendWSEvent<TranscriptionEvents,TranscripEventCallbacks>(client, TranscriptionEvents.PROCESSING, {
                 chunks: [...chunksState]
               });
             }
           }
+          chunksState[index] = {
+            id: index,
+            status: ChunkStatus.FINISHED,
+            transcription,
+            correction: correctedText
+          };
+
+          sendWSEvent<TranscriptionEvents, TranscripEventCallbacks>(client, TranscriptionEvents.PROCESSING, {
+            chunks: [...chunksState]
+          });
 
           return {
             index,
@@ -113,11 +123,22 @@ export class TranscriptionService {
     }
   }
 
-  private async getAudioDuration(filePath: string): Promise<number> {
+  private async getAudioDuration(inputFile: string): Promise<number> {
     return new Promise((resolve, reject) => {
-      ffmpeg.ffprobe(filePath, (err, metadata) => {
-        if (err) reject(err);
-        resolve(metadata.format.duration || 0);
+      this.logger.log(`Getting audio duration for ${inputFile}`);
+      ffmpeg.ffprobe(inputFile, (err, metadata) => {
+        if (err) {
+          this.logger.error(`Error getting audio duration: ${err.message}`);
+          reject(err);
+        } else {
+          const duration = metadata.format.duration;
+          if (!duration) {
+            reject(new Error("No duration found in audio metadata"));
+          } else {
+            this.logger.log(`Audio duration: ${duration} seconds`);
+            resolve(duration);
+          }
+        }
       });
     });
   }
@@ -128,7 +149,11 @@ export class TranscriptionService {
     
     for (let start = 0; start < duration; start += this.CHUNK_DURATION) {
       const end = Math.min(start + this.CHUNK_DURATION, duration);
+      if (end - start < this.CHUNK_DURATION) {
+        continue;
+      }
       const outputFile = path.join(outputFolder, `chunk_${start}_${end}.mp3`);
+      this.logger.log(`Splitting chunk from ${start} to ${end}`);
       
       await this.splitChunk(inputFile, outputFile, start, end);
       
@@ -143,14 +168,31 @@ export class TranscriptionService {
     return chunks;
   }
 
-  private async splitChunk(inputFile: string, outputFile: string, start: number, end: number): Promise<void> {
+  private async splitChunk(
+    inputFile: string,
+    outputFile: string,
+    startTime: number,
+    endTime: number,
+  ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
+      this.logger.log(`Splitting chunk from ${startTime} to ${endTime}`);
       ffmpeg(inputFile)
-        .setStartTime(start)
-        .duration(end - start)
+        .setStartTime(startTime)
+        .duration(endTime - startTime)
         .output(outputFile)
-        .on('end', resolve)
-        .on('error', reject)
+        .on("end", async () => {
+          this.logger.log(`Chunk split from ${startTime} to ${endTime}`);
+          try {
+            const buffer = await fs.promises.readFile(outputFile);
+            resolve(buffer);
+          } catch (error) {
+            reject(error);
+          }
+        })
+        .on("error", (err) => {
+          this.logger.error(`Error splitting chunk: ${err}`);
+          reject(err);
+        })
         .run();
     });
   }
@@ -173,7 +215,7 @@ export class TranscriptionService {
       messages: [
         {
           role: 'system',
-          content: 'You are a professional transcription editor. Correct any errors in the following transcription while maintaining the original meaning. Focus on grammar, punctuation, and clarity.'
+          content: 'Tu es un correcteur de transcription. Corrige les erreurs dans la transcription suivante tout en conservant le sens original. Fais attention à la grammaire, la ponctuation et la clarté. Formate la réponse en markdown.'
         },
         {
           role: 'user',
