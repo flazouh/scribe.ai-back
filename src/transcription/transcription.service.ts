@@ -22,7 +22,7 @@ export class TranscriptionService {
     });
   }
 
-  async processAudio(audioData: Buffer, client: Socket) {
+  async processAudio({ audioData, client }: { audioData: Buffer; client: Socket; }) {
     const processingId = uuidv4();
     this.logger.log(`Starting audio processing with ID: ${processingId}`);
     
