@@ -1,0 +1,54 @@
+name: Fly Deploy
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+jobs:
+  deploy_production:
+    if: github.event.pull_request.merged == true
+    name: Deploy Production to Flyio
+    runs-on: ubuntu-latest
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: actions/checkout@v3
+      - name: Send Telegram notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ${{ github.repository }} ✌🏼🔧 Merged ${{github.event.pull_request.head.ref}} into main
+
+            Details:
+            🏷️ • Name: ${{ github.event.pull_request.head.ref }}
+            🧑‍💻 • Author: ${{ github.event.pull_request.user.login }}
+            📌 • Title: ${{ github.event.pull_request.title }}
+            🗓️ • Merged at: ${{ github.event.pull_request.merged_at }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Send Telegram notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: "${{ github.repository }} 🚀 Deployment to Fly.io completed"
+      - name: Send failure notification
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: "${{ github.repository }} ❌ Deployment failed. Please check https://github.com/fluentai-pro/fluentai-backend/actions for more information."
