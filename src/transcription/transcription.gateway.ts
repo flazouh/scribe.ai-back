@@ -19,7 +19,7 @@ export class TranscriptionGateway implements OnGatewayConnection, OnGatewayDisco
   @WebSocketServer()
   server: Server;
 
-  constructor(private readonly transcriptionService: TranscriptionService) {}
+  constructor(private readonly transcriptionService: TranscriptionService) { }
 
   handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
@@ -34,13 +34,11 @@ export class TranscriptionGateway implements OnGatewayConnection, OnGatewayDisco
     try {
 
       await this.transcriptionService.processAudio(
-        payload.audioData,
-          client
-      );
+        { audioData: payload.audioData, client });
 
     } catch (error) {
-      client.emit(TranscriptionEvents.PROCESS_FINISHED, { 
-        error: error.message 
+      client.emit(TranscriptionEvents.PROCESS_FINISHED, {
+        error: error.message
       });
     }
   }
